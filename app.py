@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 from dotenv import load_dotenv
 import speech_recognition as sr
-from PIL import Image, ImageDraw
+from PIL import Image
 import pytesseract
 import re
 
@@ -73,7 +73,7 @@ if "chunk_texts" not in st.session_state:
 def extract_chunks_from_pdf(file_bytes, chunk_size=500, overlap=50):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     full_text = "".join(page.get_text() for page in doc)
-    full_text = _sanitize_text(full_text)  # (added) sanitize
+    full_text = _sanitize_text(full_text)
     chunks = []
     for i in range(0, len(full_text), chunk_size - overlap):
         piece = full_text[i:i + chunk_size]
@@ -90,29 +90,6 @@ def build_faiss_index(chunks):
     index = faiss.IndexFlatL2(dim)
     index.add(np.array(embeddings))
     return index, texts
-
-def extract_pdf_screenshot(file_bytes, search_text):
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
-    for page_num, page in enumerate(doc):
-        text_instances = page.search_for(search_text)
-        if text_instances:
-            rect = text_instances[0]
-            rect.x0 -= 5
-            rect.y0 -= 5
-            rect.x1 += 5
-            rect.y1 += 5
-            pix = page.get_pixmap(dpi=200, clip=rect)
-            img_path = f"highlight_page_{page_num+1}.png"
-            pix.save(img_path)
-            img = Image.open(img_path).convert("RGB")
-            draw = ImageDraw.Draw(img)
-            draw.rectangle(
-                [(0, 0), (img.width - 1, img.height - 1)],
-                outline="red", width=3
-            )
-            img.save(img_path)
-            return img_path, page_num + 1
-    return None, None
 
 def recognize_speech_and_answer():
     recognizer = sr.Recognizer()
@@ -163,16 +140,6 @@ def answer_query(query):
         st.markdown(f"**📌 Exact Matched Text:**")
         st.code(exact_match_text)
 
-        if st.session_state.recent_files:
-            first_file_name = next(iter(st.session_state.recent_files))
-            file_bytes = st.session_state.recent_files[first_file_name]
-            screenshot_path, page_no = extract_pdf_screenshot(file_bytes, exact_match_text[:50])
-            if screenshot_path:
-                st.markdown(f"**📄 Found in PDF - Page {page_no}**")
-                st.image(screenshot_path, caption="Answer location in PDF", use_container_width=True)
-            else:
-                st.info("No matching text found for preview.")
-
     except Exception as e:
         st.error(f"⚠️ API call failed: {e}")
 
@@ -181,7 +148,6 @@ uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multi
 if uploaded_files:
     all_chunks = []
     for file in uploaded_files:
-        # (added) type & size checks
         if file.type not in ALLOWED_PDF_MIME:
             st.error(f"❌ '{file.name}' is not a PDF.")
             continue
