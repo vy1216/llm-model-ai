@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 import speech_recognition as sr
 from PIL import Image, ImageDraw
 import pytesseract
-import pytesseract
 import re
 
 # Direct path to tesseract.exe
